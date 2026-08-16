@@ -736,6 +736,191 @@ def assign_severity(results):
 
     return results
 
+def build_management_summary(results):
+
+    print("\nBuilding management summary...")
+
+    failed = results[
+        results["audit_status"] == "FAIL"
+    ]
+
+    passed = results[
+        results["audit_status"] == "PASS"
+    ]
+
+    total_invoices = len(results)
+    failed_count = len(failed)
+    passed_count = len(passed)
+
+    total_overcharge = round(
+        failed["overcharge_amount"].sum(),
+        2,
+    )
+
+    # ---------------------------------------------------------
+    # SUMMARY
+    # ---------------------------------------------------------
+
+    summary = {
+        "total_invoices": total_invoices,
+        "passed_invoices": passed_count,
+        "failed_invoices": failed_count,
+        "pass_rate": round(
+            passed_count / total_invoices * 100,
+            2,
+        ),
+        "failure_rate": round(
+            failed_count / total_invoices * 100,
+            2,
+        ),
+        "total_overcharge_exposure": total_overcharge,
+    }
+
+    # ---------------------------------------------------------
+    # ERROR TYPE BREAKDOWN
+    # ---------------------------------------------------------
+
+    error_breakdown = (
+        failed.groupby("error_type")
+        .agg(
+            invoice_count=("invoice_id", "count"),
+            overcharge_exposure=(
+                "overcharge_amount",
+                "sum",
+            ),
+        )
+        .reset_index()
+    )
+
+    error_breakdown[
+        "overcharge_exposure"
+    ] = error_breakdown[
+        "overcharge_exposure"
+    ].round(2)
+
+    # ---------------------------------------------------------
+    # SEVERITY BREAKDOWN
+    # ---------------------------------------------------------
+
+    severity_breakdown = (
+        failed.groupby("severity")
+        .agg(
+            invoice_count=("invoice_id", "count"),
+            overcharge_exposure=(
+                "overcharge_amount",
+                "sum",
+            ),
+        )
+        .reset_index()
+    )
+
+    severity_breakdown[
+        "overcharge_exposure"
+    ] = severity_breakdown[
+        "overcharge_exposure"
+    ].round(2)
+
+    # ---------------------------------------------------------
+    # TOP FINDINGS
+    # ---------------------------------------------------------
+
+    top_findings = (
+        failed.sort_values(
+            "overcharge_amount",
+            ascending=False,
+        )
+        .head(10)
+        [
+            [
+                "invoice_id",
+                "shipment_id",
+                "error_type",
+                "severity",
+                "overcharge_amount",
+                "evidence_source",
+                "explanation",
+            ]
+        ]
+        .copy()
+    )
+
+    # ---------------------------------------------------------
+    # SAVE SUMMARY
+    # ---------------------------------------------------------
+
+    summary_df = pd.DataFrame(
+        [summary]
+    )
+
+    summary_df.to_csv(
+        "data/audit_summary.csv",
+        index=False,
+    )
+
+    error_breakdown.to_csv(
+        "data/audit_error_breakdown.csv",
+        index=False,
+    )
+
+    severity_breakdown.to_csv(
+        "data/audit_severity_breakdown.csv",
+        index=False,
+    )
+
+    top_findings.to_csv(
+        "data/audit_top_findings.csv",
+        index=False,
+    )
+
+    print("\nManagement summary:")
+
+    print(
+        f"Total invoices: "
+        f"{total_invoices:,}"
+    )
+
+    print(
+        f"Passed: "
+        f"{passed_count:,}"
+    )
+
+    print(
+        f"Failed: "
+        f"{failed_count:,}"
+    )
+
+    print(
+        f"Pass rate: "
+        f"{summary['pass_rate']:.2f}%"
+    )
+
+    print(
+        f"Overcharge exposure: "
+        f"${total_overcharge:,.2f}"
+    )
+
+    print(
+        "\nSaved:"
+    )
+
+    print(
+        "data/audit_summary.csv"
+    )
+
+    print(
+        "data/audit_error_breakdown.csv"
+    )
+
+    print(
+        "data/audit_severity_breakdown.csv"
+    )
+
+    print(
+        "data/audit_top_findings.csv"
+    )
+
+    return summary
+
 if __name__ == "__main__":
 
     (
@@ -783,6 +968,10 @@ if __name__ == "__main__":
     )
 
     results = assign_severity(
+        results
+    )
+
+    summary = build_management_summary(
         results
     )
 
