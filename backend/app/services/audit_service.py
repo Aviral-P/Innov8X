@@ -1,4 +1,3 @@
-import sys
 import tempfile
 from pathlib import Path
 
@@ -22,14 +21,8 @@ SCRIPTS_PATH = (
 # EXISTING AUDIT PIPELINE
 # ============================================================
 
-if str(SCRIPTS_PATH) not in sys.path:
-    sys.path.insert(
-        0,
-        str(SCRIPTS_PATH),
-    )
 
-
-from run_audit import run_audit  # noqa: E402
+from data.scripts.run_audit import run_audit
 
 
 # ============================================================
