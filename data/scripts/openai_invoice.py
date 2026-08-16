@@ -69,8 +69,11 @@ def render_pdf_pages(path: Path) -> list[str]:
 # ============================================================
 
 
-def extract_invoice():
-    page_images = render_pdf_pages(INVOICE_PATH)
+def extract_invoice(invoice_path=None):
+    if invoice_path is None:
+        invoice_path = INVOICE_PATH
+
+    page_images = render_pdf_pages(invoice_path)
     print(
         f"PDF pages rendered: {len(page_images)}"
     )
