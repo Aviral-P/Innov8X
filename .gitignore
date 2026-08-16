@@ -2,3 +2,10 @@
 .DS_Store
 data/raw
 tempCodeRunnerFile.py
+__pycache__
+.env
+data/invoice_audit_result.json
+data/invoice_finding.json
+data/matched_invoice.json
+data/ocr_output.json
+data/openai_ocr_output.json
