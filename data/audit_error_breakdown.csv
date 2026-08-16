@@ -1,0 +1,6 @@
+error_type,invoice_count,overcharge_exposure
+accessorial_error,2501,248525.0
+detention_error,2577,257700.0
+distance_error,2597,1365960.21
+fuel_surcharge_error,2540,181326.36
+rate_error,2596,805607.31

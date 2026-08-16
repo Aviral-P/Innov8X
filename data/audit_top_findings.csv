@@ -1,0 +1,11 @@
+invoice_id,shipment_id,error_type,severity,overcharge_amount,evidence_source,explanation
+INV00056608,SHP00056608,distance_error,CRITICAL,1275.3,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00014402,SHP00014402,distance_error,CRITICAL,1271.25,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00081248,SHP00081248,distance_error,CRITICAL,1270.8,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00003382,SHP00003382,distance_error,CRITICAL,1265.85,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00022095,SHP00022095,distance_error,CRITICAL,1265.85,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00049993,SHP00049993,distance_error,CRITICAL,1263.15,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00076702,SHP00076702,distance_error,CRITICAL,1260.9,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00080217,SHP00080217,distance_error,CRITICAL,1259.1,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00082142,SHP00082142,distance_error,CRITICAL,1258.2,shipment_evidence.csv,Invoice distance differs from operational shipment distance.
+INV00033012,SHP00033012,distance_error,CRITICAL,1258.2,shipment_evidence.csv,Invoice distance differs from operational shipment distance.

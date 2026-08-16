@@ -1,0 +1,5 @@
+severity,invoice_count,overcharge_exposure
+CRITICAL,279,308884.26
+HIGH,1497,1009567.97
+LOW,3839,224892.51
+MEDIUM,7196,1315774.14
