@@ -316,6 +316,8 @@ def build_audit_results(
     results["overcharge_amount"] = 0.0
     results["expected_amount"] = results["billed_amount"]
     results["evidence_source"] = ""
+    results["actual_value"] = float("nan")
+    results["expected_value"] = float("nan")
     results["explanation"] = ""
 
     # ---------------------------------------------------------
@@ -343,8 +345,6 @@ def build_audit_results(
             "error_type"
         ] = "distance_error"
 
-        # Calculate the financial impact of
-        # the excess mileage.
         excess_miles = max(
             row["distance_difference"],
             0
@@ -379,6 +379,22 @@ def build_audit_results(
             mask,
             "evidence_source"
         ] = "shipment_evidence.csv"
+
+        results.loc[
+            mask,
+            "actual_value"
+        ] = round(
+            row["actual_distance_miles_invoice"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_value"
+        ] = round(
+            row["actual_distance_miles_shipment"],
+            2
+        )
 
         results.loc[
             mask,
@@ -425,7 +441,8 @@ def build_audit_results(
             mask,
             "expected_amount"
         ] = round(
-            row["evidence_base_charge"],
+            row["billed_amount"]
+            - abs(row["base_charge_difference"]),
             2
         )
 
@@ -433,6 +450,22 @@ def build_audit_results(
             mask,
             "evidence_source"
         ] = "contract_rates.csv"
+
+        results.loc[
+            mask,
+            "actual_value"
+        ] = round(
+            row["calculated_base_charge"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_value"
+        ] = round(
+            row["evidence_base_charge"],
+            2
+        )
 
         results.loc[
             mask,
@@ -480,7 +513,8 @@ def build_audit_results(
             mask,
             "expected_amount"
         ] = round(
-            row["evidence_fuel_charge"],
+            row["billed_amount"]
+            - abs(row["fuel_charge_difference"]),
             2
         )
 
@@ -488,6 +522,22 @@ def build_audit_results(
             mask,
             "evidence_source"
         ] = "contract_rates.csv"
+
+        results.loc[
+            mask,
+            "actual_value"
+        ] = round(
+            row["calculated_fuel_surcharge"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_value"
+        ] = round(
+            row["evidence_fuel_charge"],
+            2
+        )
 
         results.loc[
             mask,
@@ -537,7 +587,10 @@ def build_audit_results(
             mask,
             "expected_amount"
         ] = round(
-            row["evidence_detention_charge"],
+            row["billed_amount"]
+            - abs(
+                row["detention_charge_difference"]
+            ),
             2
         )
 
@@ -545,6 +598,22 @@ def build_audit_results(
             mask,
             "evidence_source"
         ] = "delivery_evidence.csv"
+
+        results.loc[
+            mask,
+            "actual_value"
+        ] = round(
+            row["calculated_detention_charge"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_value"
+        ] = round(
+            row["evidence_detention_charge"],
+            2
+        )
 
         results.loc[
             mask,
@@ -592,7 +661,8 @@ def build_audit_results(
             mask,
             "expected_amount"
         ] = round(
-            row["accessorial_charges"],
+            row["billed_amount"]
+            - abs(row["accessorial_difference"]),
             2
         )
 
@@ -600,6 +670,22 @@ def build_audit_results(
             mask,
             "evidence_source"
         ] = "load_evidence.csv"
+
+        results.loc[
+            mask,
+            "actual_value"
+        ] = round(
+            row["calculated_accessorial_charges"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_value"
+        ] = round(
+            row["accessorial_charges"],
+            2
+        )
 
         results.loc[
             mask,
