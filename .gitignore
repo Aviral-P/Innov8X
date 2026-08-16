@@ -1,25 +1,23 @@
 .venv
+.env
 .DS_Store
 
-# Raw datasets
 data/raw
 
-# Python
 __pycache__/
 *.py[cod]
 
-# Jupyter
 .ipynb_checkpoints/
 
-# Local secrets
 .env
 
-# Temporary files
 tempCodeRunnerFile.py
 
-# Generated invoice audit outputs
 data/invoice_audit_result.json
 data/invoice_finding.json
 data/matched_invoice.json
 data/ocr_output.json
 data/openai_ocr_output.json
+
+ml/outputs/
+ml/models/
