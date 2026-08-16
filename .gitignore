@@ -21,3 +21,5 @@ data/openai_ocr_output.json
 
 ml/outputs/
 ml/models/
+
+data/final_audit_result.json
