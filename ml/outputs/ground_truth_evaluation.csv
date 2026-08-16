@@ -1,0 +1,11 @@
+metric,value
+Total invoices,85410.0
+Known injected errors,12811.0
+ML anomalies,4271.0
+True positives,1369.0
+False positives,2902.0
+False negatives,11442.0
+True negatives,69697.0
+Precision,0.32053383282603604
+Recall,0.10686129107797986
+F1 score,0.16028568083362604

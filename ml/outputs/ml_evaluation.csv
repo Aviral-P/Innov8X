@@ -1,0 +1,5 @@
+category,invoice_count,percentage
+ML anomaly + Rule failure,1369,1.6028568083362604
+ML anomaly + Rule pass,2902,3.397728603208056
+ML normal + Rule failure,11442,13.396557780119425
+ML normal + Rule pass,69697,81.60285680833626
