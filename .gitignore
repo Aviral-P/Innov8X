@@ -2,3 +2,5 @@
 .DS_Store
 data/raw
 .ipynb_checkpoints/
+__pycache__/
+*.py[cod]
