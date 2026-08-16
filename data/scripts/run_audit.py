@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from openai_invoice import extract_invoice
-from invoice_matcher import (
+from data.scripts.openai_invoice import extract_invoice
+from data.scripts.invoice_matcher import (
     match_invoice_by_identifiers,
 )
-from invoice_auditor import audit_invoice
-from finding_builder import build_finding
+from data.scripts.invoice_auditor import audit_invoice
+from data.scripts.finding_builder import build_finding
 
 
 # ============================================================

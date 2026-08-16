@@ -1,3 +1,4 @@
+import sys
 import tempfile
 from pathlib import Path
 
@@ -5,22 +6,21 @@ from fastapi import UploadFile
 
 
 # ============================================================
-# PATHS
+# PROJECT PATH
 # ============================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-SCRIPTS_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "scripts"
-)
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(
+        0,
+        str(PROJECT_ROOT),
+    )
 
 
 # ============================================================
 # EXISTING AUDIT PIPELINE
 # ============================================================
-
 
 from data.scripts.run_audit import run_audit
 
