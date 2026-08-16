@@ -291,6 +291,327 @@ def audit_accessorial(invoices, loads):
 
     return x
 
+def build_audit_results(
+    invoices,
+    distance_results,
+    rate_results,
+    fuel_results,
+    detention_results,
+    accessorial_results,
+):
+
+    print("\nBuilding audit results...")
+
+    results = invoices[
+        [
+            "invoice_id",
+            "shipment_id",
+            "load_id",
+            "billed_amount",
+        ]
+    ].copy()
+
+    results["audit_status"] = "PASS"
+    results["error_type"] = ""
+    results["overcharge_amount"] = 0.0
+    results["expected_amount"] = results["billed_amount"]
+    results["evidence_source"] = ""
+    results["explanation"] = ""
+
+    # ---------------------------------------------------------
+    # DISTANCE
+    # ---------------------------------------------------------
+
+    distance_flags = distance_results[
+        distance_results["distance_error"]
+    ]
+
+    for _, row in distance_flags.iterrows():
+
+        mask = (
+            results["invoice_id"]
+            == row["invoice_id"]
+        )
+
+        results.loc[
+            mask,
+            "audit_status"
+        ] = "FAIL"
+
+        results.loc[
+            mask,
+            "error_type"
+        ] = "distance_error"
+
+        # Calculate the financial impact of
+        # the excess mileage.
+        excess_miles = max(
+            row["distance_difference"],
+            0
+        )
+
+        distance_overcharge = (
+            excess_miles
+            * (
+                row["base_rate_per_mile"]
+                + row["fuel_surcharge_rate"]
+            )
+        )
+
+        results.loc[
+            mask,
+            "overcharge_amount"
+        ] = round(
+            distance_overcharge,
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_amount"
+        ] = round(
+            row["billed_amount"]
+            - distance_overcharge,
+            2
+        )
+
+        results.loc[
+            mask,
+            "evidence_source"
+        ] = "shipment_evidence.csv"
+
+        results.loc[
+            mask,
+            "explanation"
+        ] = (
+            "Invoice distance differs from "
+            "operational shipment distance."
+        )
+
+    # ---------------------------------------------------------
+    # RATE
+    # ---------------------------------------------------------
+
+    rate_flags = rate_results[
+        rate_results["rate_error"]
+    ]
+
+    for _, row in rate_flags.iterrows():
+
+        mask = (
+            results["invoice_id"]
+            == row["invoice_id"]
+        )
+
+        results.loc[
+            mask,
+            "audit_status"
+        ] = "FAIL"
+
+        results.loc[
+            mask,
+            "error_type"
+        ] = "rate_error"
+
+        results.loc[
+            mask,
+            "overcharge_amount"
+        ] = round(
+            abs(row["base_charge_difference"]),
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_amount"
+        ] = round(
+            row["evidence_base_charge"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "evidence_source"
+        ] = "contract_rates.csv"
+
+        results.loc[
+            mask,
+            "explanation"
+        ] = (
+            "Invoice base charge differs from "
+            "the contracted rate applied to "
+            "the invoiced distance."
+        )
+
+    # ---------------------------------------------------------
+    # FUEL SURCHARGE
+    # ---------------------------------------------------------
+
+    fuel_flags = fuel_results[
+        fuel_results["fuel_surcharge_error"]
+    ]
+
+    for _, row in fuel_flags.iterrows():
+
+        mask = (
+            results["invoice_id"]
+            == row["invoice_id"]
+        )
+
+        results.loc[
+            mask,
+            "audit_status"
+        ] = "FAIL"
+
+        results.loc[
+            mask,
+            "error_type"
+        ] = "fuel_surcharge_error"
+
+        results.loc[
+            mask,
+            "overcharge_amount"
+        ] = round(
+            abs(row["fuel_charge_difference"]),
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_amount"
+        ] = round(
+            row["evidence_fuel_charge"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "evidence_source"
+        ] = "contract_rates.csv"
+
+        results.loc[
+            mask,
+            "explanation"
+        ] = (
+            "Invoice fuel surcharge differs "
+            "from the contracted surcharge "
+            "applied to the invoiced distance."
+        )
+
+    # ---------------------------------------------------------
+    # DETENTION
+    # ---------------------------------------------------------
+
+    detention_flags = detention_results[
+        detention_results["detention_error"]
+    ]
+
+    for _, row in detention_flags.iterrows():
+
+        mask = (
+            results["invoice_id"]
+            == row["invoice_id"]
+        )
+
+        results.loc[
+            mask,
+            "audit_status"
+        ] = "FAIL"
+
+        results.loc[
+            mask,
+            "error_type"
+        ] = "detention_error"
+
+        results.loc[
+            mask,
+            "overcharge_amount"
+        ] = round(
+            abs(
+                row["detention_charge_difference"]
+            ),
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_amount"
+        ] = round(
+            row["evidence_detention_charge"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "evidence_source"
+        ] = "delivery_evidence.csv"
+
+        results.loc[
+            mask,
+            "explanation"
+        ] = (
+            "Invoice detention charge differs "
+            "from detention supported by "
+            "delivery-event evidence."
+        )
+
+    # ---------------------------------------------------------
+    # ACCESSORIAL
+    # ---------------------------------------------------------
+
+    accessorial_flags = accessorial_results[
+        accessorial_results["accessorial_error"]
+    ]
+
+    for _, row in accessorial_flags.iterrows():
+
+        mask = (
+            results["invoice_id"]
+            == row["invoice_id"]
+        )
+
+        results.loc[
+            mask,
+            "audit_status"
+        ] = "FAIL"
+
+        results.loc[
+            mask,
+            "error_type"
+        ] = "accessorial_error"
+
+        results.loc[
+            mask,
+            "overcharge_amount"
+        ] = round(
+            abs(row["accessorial_difference"]),
+            2
+        )
+
+        results.loc[
+            mask,
+            "expected_amount"
+        ] = round(
+            row["accessorial_charges"],
+            2
+        )
+
+        results.loc[
+            mask,
+            "evidence_source"
+        ] = "load_evidence.csv"
+
+        results.loc[
+            mask,
+            "explanation"
+        ] = (
+            "Invoice accessorial charge differs "
+            "from the load-level accessorial "
+            "evidence."
+        )
+
+    return results
+
 if __name__ == "__main__":
 
     (
@@ -301,29 +622,67 @@ if __name__ == "__main__":
         loads,
     ) = load_data()
 
-    audit_distance(
+    distance_results = audit_distance(
         invoices,
         shipments,
     )
 
-    audit_rate(
+    rate_results = audit_rate(
         invoices,
         shipments,
         contracts,
     )
-    
-    audit_fuel_surcharge(
+
+    fuel_results = audit_fuel_surcharge(
         invoices,
         contracts,
     )
-    
-    audit_detention(
+
+    detention_results = audit_detention(
         invoices,
         shipments,
         deliveries,
     )
-    
-    audit_accessorial(
+
+    accessorial_results = audit_accessorial(
         invoices,
         loads,
+    )
+
+    results = build_audit_results(
+        invoices,
+        distance_results,
+        rate_results,
+        fuel_results,
+        detention_results,
+        accessorial_results,
+    )
+
+    output_path = (
+        "data/audit_results.csv"
+    )
+
+    results.to_csv(
+        output_path,
+        index=False,
+    )
+
+    print(
+        f"\nAudit results saved to: "
+        f"{output_path}"
+    )
+
+    print(
+        f"Total invoices audited: "
+        f"{len(results):,}"
+    )
+
+    print(
+        f"Failed invoices: "
+        f"{(results['audit_status'] == 'FAIL').sum():,}"
+    )
+
+    print(
+        f"Passed invoices: "
+        f"{(results['audit_status'] == 'PASS').sum():,}"
     )
