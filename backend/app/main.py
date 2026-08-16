@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.ml import router as ml_router
+
 from app.api.routes.audits import router as audits_router
 
 
@@ -9,6 +11,8 @@ app = FastAPI(
     description="Evidence-driven freight invoice auditing API",
     version="1.0.0",
 )
+
+app.include_router(ml_router)
 
 
 # ============================================================
