@@ -698,6 +698,44 @@ def build_audit_results(
 
     return results
 
+def assign_severity(results):
+
+    print("\nAssigning audit severity...")
+
+    results["severity"] = "LOW"
+
+    results.loc[
+        results["overcharge_amount"] >= 100,
+        "severity"
+    ] = "MEDIUM"
+
+    results.loc[
+        results["overcharge_amount"] >= 500,
+        "severity"
+    ] = "HIGH"
+
+    results.loc[
+        results["overcharge_amount"] >= 1000,
+        "severity"
+    ] = "CRITICAL"
+
+    # PASS invoices should not have a severity.
+    results.loc[
+        results["audit_status"] == "PASS",
+        "severity"
+    ] = ""
+
+    print("\nSeverity distribution:")
+
+    print(
+        results[
+            results["audit_status"] == "FAIL"
+        ]["severity"]
+        .value_counts()
+    )
+
+    return results
+
 if __name__ == "__main__":
 
     (
@@ -742,6 +780,10 @@ if __name__ == "__main__":
         fuel_results,
         detention_results,
         accessorial_results,
+    )
+
+    results = assign_severity(
+        results
     )
 
     output_path = (
