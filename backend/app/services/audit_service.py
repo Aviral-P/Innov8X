@@ -42,6 +42,34 @@ SUPPORTED_EXTENSIONS = {
 
 
 # ============================================================
+# HELPERS
+# ============================================================
+
+def safe_float(value, default=0.0):
+    """
+    Convert a value to float without crashing on null,
+    empty, or malformed values.
+    """
+    if value is None:
+        return default
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_list(value):
+    """
+    Always return a list for API fields that expect lists.
+    """
+    if isinstance(value, list):
+        return value
+
+    return []
+
+
+# ============================================================
 # RESPONSE BUILDER
 # ============================================================
 
@@ -49,61 +77,111 @@ def build_api_response(
     result: dict,
 ) -> dict:
     """
-    Convert the internal audit pipeline result
-    into the public API response format.
+    Convert the internal audit pipeline result into the
+    public API response.
+
+    The response is intentionally tolerant of incomplete
+    extraction, unmatched invoices, missing contracts, and
+    audits requiring manual review.
     """
 
-    invoice = result.get(
-        "invoice"
-    ) or {}
+    result = result or {}
 
-    matching = result.get(
-        "matching"
-    ) or {}
+    invoice = (
+        result.get("invoice")
+        or {}
+    )
 
-    audit = result.get(
-        "audit"
-    ) or {}
+    matching = (
+        result.get("matching")
+        or {}
+    )
 
-    finding_wrapper = result.get(
-        "finding"
-    ) or {}
+    audit = (
+        result.get("audit")
+        or {}
+    )
+
+    finding_wrapper = (
+        result.get("finding")
+        or {}
+    )
 
     finding_data = (
         finding_wrapper.get("finding")
         or {}
     )
 
-    # --------------------------------------------------------
-    # FINANCIAL SUMMARY
-    # --------------------------------------------------------
+    # ========================================================
+    # EXTRACTION QUALITY
+    # ========================================================
 
-    financial_summary = {
-        "billed_amount": float(
-            audit.get(
-                "billed_total",
-                0,
+    extraction_metadata = (
+        invoice.get(
+            "extraction_metadata"
+        )
+        or {}
+    )
+
+    extraction = {
+        "document_type": extraction_metadata.get(
+            "document_type",
+            "freight_invoice",
+        ),
+
+        "confidence": extraction_metadata.get(
+            "confidence"
+        ),
+
+        "needs_review": bool(
+            extraction_metadata.get(
+                "needs_review",
+                False,
             )
         ),
 
-        "expected_amount": float(
-            audit.get(
-                "expected_total",
-                0,
+        "missing_fields": safe_list(
+            extraction_metadata.get(
+                "missing_critical_fields",
+                [],
             )
         ),
 
-        "overcharge_amount": float(
-            audit.get(
-                "overcharge_amount",
-                0,
+        "review_reasons": safe_list(
+            extraction_metadata.get(
+                "review_reasons",
+                [],
             )
         ),
     }
 
-    # --------------------------------------------------------
+    # ========================================================
+    # FINANCIAL SUMMARY
+    # ========================================================
+
+    financial_summary = {
+        "billed_amount": safe_float(
+            audit.get(
+                "billed_total"
+            )
+        ),
+
+        "expected_amount": safe_float(
+            audit.get(
+                "expected_total"
+            )
+        ),
+
+        "overcharge_amount": safe_float(
+            audit.get(
+                "overcharge_amount"
+            )
+        ),
+    }
+
+    # ========================================================
     # FINDINGS
-    # --------------------------------------------------------
+    # ========================================================
 
     findings = []
 
@@ -121,37 +199,46 @@ def build_api_response(
                     "Audit finding",
                 ),
 
-                "billed_amount": float(
+                "billed_amount": safe_float(
                     finding_data.get(
-                        "billed_amount",
-                        0,
+                        "billed_amount"
                     )
                 ),
 
-                "expected_amount": float(
+                "expected_amount": safe_float(
                     finding_data.get(
-                        "expected_amount",
-                        0,
+                        "expected_amount"
                     )
                 ),
 
-                "variance": float(
+                "variance": safe_float(
                     finding_data.get(
-                        "variance",
-                        0,
+                        "variance"
                     )
                 ),
 
                 "actual_distance_miles": (
-                    finding_data.get(
-                        "actual_distance_miles"
+                    safe_float(
+                        finding_data.get(
+                            "actual_distance_miles"
+                        )
                     )
+                    if finding_data.get(
+                        "actual_distance_miles"
+                    ) is not None
+                    else None
                 ),
 
                 "contract_rate_per_mile": (
-                    finding_data.get(
-                        "contract_rate_per_mile"
+                    safe_float(
+                        finding_data.get(
+                            "contract_rate_per_mile"
+                        )
                     )
+                    if finding_data.get(
+                        "contract_rate_per_mile"
+                    ) is not None
+                    else None
                 ),
 
                 "calculation": (
@@ -167,9 +254,9 @@ def build_api_response(
             }
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # EVIDENCE
-    # --------------------------------------------------------
+    # ========================================================
 
     audit_evidence = (
         audit.get(
@@ -196,54 +283,89 @@ def build_api_response(
         ),
     }
 
-    # --------------------------------------------------------
+    # ========================================================
     # ML PLACEHOLDER
-    # --------------------------------------------------------
+    # ========================================================
 
     ml = {
         "risk": None,
         "anomaly_score": None,
     }
 
-    # --------------------------------------------------------
+    # ========================================================
+    # IDENTIFIERS
+    # ========================================================
+
+    invoice_id = audit.get(
+        "invoice_id"
+    )
+
+    if invoice_id is None:
+        invoice_id = invoice.get(
+            "invoice_number"
+        )
+
+    shipment_id = audit.get(
+        "shipment_id"
+    )
+
+    if shipment_id is None:
+        shipment_id = matching.get(
+            "shipment_id"
+        )
+
+    load_id = audit.get(
+        "load_id"
+    )
+
+    if load_id is None:
+        load_id = matching.get(
+            "load_id"
+        )
+
+    contract_id = audit.get(
+        "contract_id"
+    )
+
+    # ========================================================
+    # AUDIT STATUS
+    # ========================================================
+
+    status = audit.get(
+        "audit_status"
+    )
+
+    if not status:
+        status = (
+            "REVIEW"
+            if matching.get(
+                "match_status"
+            ) != "MATCHED"
+            else "UNKNOWN"
+        )
+
+    severity = audit.get(
+        "severity"
+    ) or "LOW"
+
+    # ========================================================
     # FINAL API RESPONSE
-    # --------------------------------------------------------
+    # ========================================================
 
     return {
-        "invoice_id": audit.get(
-            "invoice_id",
-            invoice.get(
-                "invoice_number"
-            ),
-        ),
+        "invoice_id": invoice_id,
 
-        "shipment_id": audit.get(
-            "shipment_id",
-            matching.get(
-                "shipment_id"
-            ),
-        ),
+        "shipment_id": shipment_id,
 
-        "load_id": audit.get(
-            "load_id",
-            matching.get(
-                "load_id"
-            ),
-        ),
+        "load_id": load_id,
 
-        "contract_id": audit.get(
-            "contract_id"
-        ),
+        "contract_id": contract_id,
 
-        "status": audit.get(
-            "audit_status",
-            "UNKNOWN",
-        ),
+        "status": status,
 
-        "severity": audit.get(
-            "severity",
-            "UNKNOWN",
-        ),
+        "severity": severity,
+
+        "extraction": extraction,
 
         "financial_summary": financial_summary,
 
@@ -252,7 +374,7 @@ def build_api_response(
         "checks": audit.get(
             "checks",
             {},
-        ),
+        ) or {},
 
         "evidence": evidence,
 
@@ -272,13 +394,26 @@ async def audit_invoice(
     invoice: UploadFile,
 ) -> dict:
     """
-    Save the uploaded document temporarily and
-    run the existing Innov8X multimodal audit pipeline.
+    Save the uploaded document temporarily and run the
+    existing Innov8X multimodal audit pipeline.
+
+    Supported inputs:
+
+        PDF
+        PNG
+        JPG
+        JPEG
+        WEBP
+        TIFF
+        EML
+
+    The original extension is preserved so the multimodal
+    extraction layer can determine how to process it.
     """
 
-    # --------------------------------------------------------
-    # FILE TYPE
-    # --------------------------------------------------------
+    # ========================================================
+    # FILE TYPE VALIDATION
+    # ========================================================
 
     suffix = Path(
         invoice.filename or ""
@@ -292,9 +427,9 @@ async def audit_invoice(
             "WEBP, TIFF and EML."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # READ UPLOAD
-    # --------------------------------------------------------
+    # ========================================================
 
     contents = await invoice.read()
 
@@ -308,9 +443,9 @@ async def audit_invoice(
 
     try:
 
-        # ----------------------------------------------------
-        # PRESERVE ORIGINAL EXTENSION
-        # ----------------------------------------------------
+        # ====================================================
+        # TEMPORARY FILE
+        # ====================================================
 
         with tempfile.NamedTemporaryFile(
             suffix=suffix,
@@ -335,23 +470,27 @@ async def audit_invoice(
             f"{temporary_path}"
         )
 
-        # ----------------------------------------------------
+        # ====================================================
         # RUN EXISTING PIPELINE
-        # ----------------------------------------------------
+        # ====================================================
 
         result = run_audit(
             temporary_path
         )
 
-        # ----------------------------------------------------
+        # ====================================================
         # BUILD API RESPONSE
-        # ----------------------------------------------------
+        # ====================================================
 
         return build_api_response(
             result
         )
 
     finally:
+
+        # ====================================================
+        # CLEANUP
+        # ====================================================
 
         if (
             temporary_path is not None

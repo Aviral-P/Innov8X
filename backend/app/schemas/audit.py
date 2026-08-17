@@ -1,29 +1,33 @@
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FinancialSummary(BaseModel):
-    billed_amount: float
-    expected_amount: float
-    overcharge_amount: float
+    billed_amount: float = 0.0
+    expected_amount: float = 0.0
+    overcharge_amount: float = 0.0
 
 
 class Finding(BaseModel):
     type: str
     title: str
-    billed_amount: float
-    expected_amount: float
-    variance: float
+
+    billed_amount: float = 0.0
+    expected_amount: float = 0.0
+    variance: float = 0.0
+
     actual_distance_miles: float | None = None
     contract_rate_per_mile: float | None = None
+
     calculation: str | None = None
+
     explanation: str
 
 
 class CheckResult(BaseModel):
     status: str
-    variance: float
+    variance: float = 0.0
 
 
 class Evidence(BaseModel):
@@ -38,25 +42,95 @@ class MLResult(BaseModel):
     anomaly_score: float | None = None
 
 
-class AuditResponse(BaseModel):
-    invoice_id: str
-    shipment_id: str
-    load_id: str
-    contract_id: str
+class ExtractionResult(BaseModel):
+    document_type: str = "freight_invoice"
 
-    status: str
-    severity: str
+    confidence: float | None = None
+
+    needs_review: bool = False
+
+    missing_fields: list[str] = Field(
+        default_factory=list
+    )
+
+    review_reasons: list[str] = Field(
+        default_factory=list
+    )
+
+
+class AuditResponse(BaseModel):
+    # --------------------------------------------------------
+    # IDENTIFIERS
+    # --------------------------------------------------------
+
+    invoice_id: str | None = None
+    shipment_id: str | None = None
+    load_id: str | None = None
+    contract_id: str | None = None
+
+    # --------------------------------------------------------
+    # AUDIT RESULT
+    # --------------------------------------------------------
+
+    status: str = "REVIEW"
+    severity: str = "LOW"
+
+    # --------------------------------------------------------
+    # EXTRACTION
+    # --------------------------------------------------------
+
+    extraction: ExtractionResult
+
+    # --------------------------------------------------------
+    # FINANCIAL RESULT
+    # --------------------------------------------------------
 
     financial_summary: FinancialSummary
 
-    findings: list[Finding]
+    # --------------------------------------------------------
+    # FINDINGS
+    # --------------------------------------------------------
 
-    checks: dict[str, Any]
+    findings: list[Finding] = Field(
+        default_factory=list
+    )
 
-    evidence: Evidence
+    # --------------------------------------------------------
+    # CHECKS
+    # --------------------------------------------------------
 
-    ml: MLResult
+    checks: dict[str, Any] = Field(
+        default_factory=dict
+    )
 
-    matching: dict[str, Any]
+    # --------------------------------------------------------
+    # EVIDENCE
+    # --------------------------------------------------------
 
-    invoice: dict[str, Any]
+    evidence: Evidence = Field(
+        default_factory=Evidence
+    )
+
+    # --------------------------------------------------------
+    # ML
+    # --------------------------------------------------------
+
+    ml: MLResult = Field(
+        default_factory=MLResult
+    )
+
+    # --------------------------------------------------------
+    # MATCHING
+    # --------------------------------------------------------
+
+    matching: dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+    # --------------------------------------------------------
+    # ORIGINAL NORMALIZED INVOICE
+    # --------------------------------------------------------
+
+    invoice: dict[str, Any] = Field(
+        default_factory=dict
+    )

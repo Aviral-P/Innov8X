@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from data.scripts.openai_invoice import extract_invoice
-from data.scripts.normalize_invoice import normalize_invoice
-from data.scripts.normalize_invoice import normalize_invoice
+from data.scripts.openai_invoice import (
+    extract_invoice,
+    SUPPORTED_EXTENSIONS,
+)
 from data.scripts.invoice_matcher import (
     match_invoice_by_identifiers,
 )
@@ -63,22 +64,6 @@ OUTPUT_PATH = (
 
 
 # ============================================================
-# SUPPORTED DOCUMENT TYPES
-# ============================================================
-
-SUPPORTED_EXTENSIONS = {
-    ".pdf",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".webp",
-    ".tif",
-    ".tiff",
-    ".eml",
-}
-
-
-# ============================================================
 # DATA LOADING
 # ============================================================
 
@@ -114,13 +99,102 @@ def load_evidence():
 
 
 # ============================================================
+# INSUFFICIENT EVIDENCE RESULT
+# ============================================================
+
+def build_insufficient_evidence_result(
+    invoice,
+    matching,
+):
+    """
+    Build a safe result when the invoice cannot be
+    reliably connected to operational evidence.
+
+    IMPORTANT:
+    We deliberately do not perform a financial audit
+    without sufficient evidence.
+    """
+
+    return {
+        "invoice": invoice,
+
+        "matching": matching,
+
+        "audit": {
+            "invoice_id": (
+                invoice.get("invoice_number")
+                or "UNKNOWN"
+            ),
+
+            "shipment_id": (
+                matching.get("shipment_id")
+                or "NOT_AVAILABLE"
+            ),
+
+            "load_id": (
+                matching.get("load_id")
+                or "NOT_AVAILABLE"
+            ),
+
+            "contract_id": (
+                matching.get("contract_id")
+                or "NOT_AVAILABLE"
+            ),
+
+            "audit_status": (
+                "INSUFFICIENT_EVIDENCE"
+            ),
+
+            "error_types": [],
+
+            "overcharge_amount": 0.0,
+
+            "severity": "REVIEW",
+
+            "billed_total": (
+                float(
+                    invoice.get(
+                        "grand_total"
+                    ) or 0
+                )
+            ),
+
+            "expected_total": 0.0,
+
+            "total_variance": 0.0,
+
+            "checks": {},
+
+            "evidence": {},
+
+            "review_reason": (
+                matching.get(
+                    "reason",
+                    "The invoice could not be "
+                    "reliably matched to operational "
+                    "evidence.",
+                )
+            ),
+        },
+
+        "finding": None,
+    }
+
+
+# ============================================================
 # PIPELINE
 # ============================================================
 
 def run_audit(invoice_path):
 
+    invoice_path = Path(
+        invoice_path
+    ).expanduser().resolve()
+
     print("=" * 60)
-    print("              INNOV8X INVOICE AUDIT")
+    print(
+        "              INNOV8X INVOICE AUDIT"
+    )
     print("=" * 60)
 
     print(
@@ -128,23 +202,15 @@ def run_audit(invoice_path):
     )
 
     # --------------------------------------------------------
-    # 1. MULTIMODAL EXTRACTION + NORMALIZATION
+    # 1. MULTIMODAL EXTRACTION
     # --------------------------------------------------------
 
     print(
         "\n[1/5] Extracting and understanding invoice..."
     )
 
-    raw_invoice = extract_invoice(
+    invoice = extract_invoice(
         invoice_path
-    )
-
-    invoice = normalize_invoice(
-        raw_invoice
-    )
-
-    invoice = normalize_invoice(
-        raw_invoice
     )
 
     print(
@@ -162,6 +228,11 @@ def run_audit(invoice_path):
         f"{invoice.get('load_reference')}"
     )
 
+    print(
+        f"Extraction confidence: "
+        f"{invoice.get('extraction_metadata', {}).get('confidence')}"
+    )
+
     extraction_metadata = (
         invoice.get(
             "extraction_metadata"
@@ -169,19 +240,26 @@ def run_audit(invoice_path):
         or {}
     )
 
-    print(
-        f"Extraction confidence: "
-        f"{extraction_metadata.get('classifier_confidence')}"
-    )
-
     if extraction_metadata.get(
-        "needs_review",
-        False,
+        "needs_review"
     ):
 
         print(
             "Warning: extraction requires review."
         )
+
+        review_reasons = (
+            extraction_metadata.get(
+                "review_reasons"
+            )
+            or []
+        )
+
+        for reason in review_reasons:
+
+            print(
+                f"  - {reason}"
+            )
 
     # --------------------------------------------------------
     # 2. LOAD EVIDENCE
@@ -202,6 +280,16 @@ def run_audit(invoice_path):
     print(
         f"Shipments available: "
         f"{len(shipments):,}"
+    )
+
+    print(
+        f"Loads available: "
+        f"{len(loads):,}"
+    )
+
+    print(
+        f"Contracts available: "
+        f"{len(contracts):,}"
     )
 
     # --------------------------------------------------------
@@ -229,16 +317,43 @@ def run_audit(invoice_path):
         f"{matching.get('confidence')}"
     )
 
+    print(
+        f"Match method: "
+        f"{matching.get('match_method')}"
+    )
+
+    if matching.get(
+        "matched_attributes"
+    ):
+
+        print(
+            "Matched attributes: "
+            + ", ".join(
+                matching[
+                    "matched_attributes"
+                ]
+            )
+        )
+
+    # --------------------------------------------------------
+    # NO RELIABLE EVIDENCE
+    # --------------------------------------------------------
+
     if matching.get(
         "match_status"
     ) != "MATCHED":
 
-        result = {
-            "invoice": invoice,
-            "matching": matching,
-            "audit": None,
-            "finding": None,
-        }
+        print(
+            "\nEvidence matching was not sufficient "
+            "for an automatic financial audit."
+        )
+
+        result = (
+            build_insufficient_evidence_result(
+                invoice,
+                matching,
+            )
+        )
 
         OUTPUT_PATH.write_text(
             json.dumps(
@@ -250,15 +365,45 @@ def run_audit(invoice_path):
         )
 
         print(
-            "\nAudit stopped:"
+            "\n============================================================"
         )
 
         print(
-            json.dumps(
-                matching,
-                indent=2,
-                default=str,
-            )
+            "             AUDIT REQUIRES REVIEW"
+        )
+
+        print(
+            "============================================================"
+        )
+
+        print(
+            f"Status: "
+            f"INSUFFICIENT_EVIDENCE"
+        )
+
+        print(
+            f"Reason: "
+            f"{matching.get('reason')}"
+        )
+
+        print(
+            "\nNo financial conclusion was generated."
+        )
+
+        print(
+            "Additional operational evidence is required."
+        )
+
+        print(
+            f"\nSaved to:"
+        )
+
+        print(
+            OUTPUT_PATH
+        )
+
+        print(
+            "============================================================"
         )
 
         return result
@@ -378,7 +523,9 @@ def run_audit(invoice_path):
         "\nFindings:"
     )
 
-    for error in audit["error_types"]:
+    for error in audit[
+        "error_types"
+    ]:
 
         print(
             f"  - {error}"
@@ -412,7 +559,7 @@ def main():
         )
 
         print(
-            "python data/scripts/run_audit.py "
+            "python -m data.scripts.run_audit "
             "<invoice>"
         )
 
@@ -420,12 +567,13 @@ def main():
             "\nSupported formats:"
         )
 
-        for extension in sorted(
-            SUPPORTED_EXTENSIONS
-        ):
-            print(
-                f"  {extension}"
+        print(
+            ", ".join(
+                sorted(
+                    SUPPORTED_EXTENSIONS
+                )
             )
+        )
 
         sys.exit(1)
 
@@ -436,7 +584,7 @@ def main():
     if not invoice_path.exists():
 
         print(
-            "ERROR: Invoice/document not found:"
+            "ERROR: Invoice not found:"
         )
 
         print(
@@ -445,8 +593,9 @@ def main():
 
         sys.exit(1)
 
-    if invoice_path.suffix.lower() not in (
-        SUPPORTED_EXTENSIONS
+    if (
+        invoice_path.suffix.lower()
+        not in SUPPORTED_EXTENSIONS
     ):
 
         print(
@@ -475,28 +624,45 @@ def main():
 
     except ValueError as exc:
 
+        # ----------------------------------------------------
+        # INVALID DOCUMENT
+        # ----------------------------------------------------
+
         message = str(exc)
 
         if message.startswith(
             "INVALID_INVOICE:"
         ):
 
-            reason = message[
-                len("INVALID_INVOICE:")
-            ].strip()
+            reason = message.replace(
+                "INVALID_INVOICE:",
+                "",
+                1,
+            )
 
             print(
-                "\nINVALID DOCUMENT"
+                "\n============================================================"
+            )
+
+            print(
+                "             INVALID INVOICE"
+            )
+
+            print(
+                "============================================================"
             )
 
             print(
                 "Kindly upload a valid freight invoice."
             )
 
-            if reason:
-                print(
-                    f"Reason: {reason}"
-                )
+            print(
+                f"Reason: {reason}"
+            )
+
+            print(
+                "============================================================"
+            )
 
             sys.exit(2)
 
@@ -515,5 +681,10 @@ def main():
         sys.exit(1)
 
 
+# ============================================================
+# ENTRY POINT
+# ============================================================
+
 if __name__ == "__main__":
+
     main()
