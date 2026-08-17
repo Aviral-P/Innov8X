@@ -26,6 +26,13 @@ from data.scripts.run_audit import run_audit
 
 
 # ============================================================
+# ML SERVICE
+# ============================================================
+
+from app.services.ml_service import predict_anomaly
+
+
+# ============================================================
 # SUPPORTED DOCUMENT TYPES
 # ============================================================
 
@@ -45,28 +52,98 @@ SUPPORTED_EXTENSIONS = {
 # HELPERS
 # ============================================================
 
-def safe_float(value, default=0.0):
+def safe_float(
+    value,
+    default=0.0,
+):
     """
-    Convert a value to float without crashing on null,
-    empty, or malformed values.
+    Convert a value to float without crashing on
+    null, empty, currency-formatted, or malformed values.
     """
+
     if value is None:
         return default
 
+    if isinstance(value, str):
+        value = (
+            value
+            .replace("$", "")
+            .replace(",", "")
+            .strip()
+        )
+
     try:
         return float(value)
+
     except (TypeError, ValueError):
         return default
 
 
-def safe_list(value):
+def safe_list(
+    value,
+):
     """
-    Always return a list for API fields that expect lists.
+    Always return a list for API fields
+    that expect lists.
     """
+
     if isinstance(value, list):
         return value
 
     return []
+
+
+# ============================================================
+# ML RESULT BUILDER
+# ============================================================
+
+def build_ml_result(
+    invoice_id,
+) -> dict:
+    """
+    Look up the precomputed ML result for an invoice.
+
+    ML is intentionally non-blocking:
+    if an invoice does not exist in the ML output,
+    the normal evidence audit can still be returned.
+    """
+
+    empty_result = {
+        "risk": None,
+        "anomaly_score": None,
+    }
+
+    if not invoice_id:
+        return empty_result
+
+    try:
+
+        result = predict_anomaly(
+            str(invoice_id)
+        )
+
+        return {
+            "risk": result.get(
+                "ml_risk"
+            ),
+
+            "anomaly_score": result.get(
+                "anomaly_score"
+            ),
+        }
+
+    except ValueError:
+
+        return empty_result
+
+    except Exception as exc:
+
+        print(
+            "ML prediction lookup failed:",
+            exc,
+        )
+
+        return empty_result
 
 
 # ============================================================
@@ -77,15 +154,23 @@ def build_api_response(
     result: dict,
 ) -> dict:
     """
-    Convert the internal audit pipeline result into the
-    public API response.
+    Convert the internal audit pipeline result
+    into the public API response.
 
-    The response is intentionally tolerant of incomplete
-    extraction, unmatched invoices, missing contracts, and
-    audits requiring manual review.
+    The response is intentionally tolerant of:
+
+    - incomplete extraction
+    - unmatched invoices
+    - missing contracts
+    - missing ML results
+    - audits requiring manual review
     """
 
     result = result or {}
+
+    # ========================================================
+    # INTERNAL RESULT SECTIONS
+    # ========================================================
 
     invoice = (
         result.get("invoice")
@@ -284,15 +369,6 @@ def build_api_response(
     }
 
     # ========================================================
-    # ML PLACEHOLDER
-    # ========================================================
-
-    ml = {
-        "risk": None,
-        "anomaly_score": None,
-    }
-
-    # ========================================================
     # IDENTIFIERS
     # ========================================================
 
@@ -328,6 +404,14 @@ def build_api_response(
     )
 
     # ========================================================
+    # ML ANOMALY DETECTION
+    # ========================================================
+
+    ml = build_ml_result(
+        invoice_id
+    )
+
+    # ========================================================
     # AUDIT STATUS
     # ========================================================
 
@@ -336,6 +420,7 @@ def build_api_response(
     )
 
     if not status:
+
         status = (
             "REVIEW"
             if matching.get(
@@ -344,9 +429,12 @@ def build_api_response(
             else "UNKNOWN"
         )
 
-    severity = audit.get(
-        "severity"
-    ) or "LOW"
+    severity = (
+        audit.get(
+            "severity"
+        )
+        or "LOW"
+    )
 
     # ========================================================
     # FINAL API RESPONSE
@@ -371,10 +459,13 @@ def build_api_response(
 
         "findings": findings,
 
-        "checks": audit.get(
-            "checks",
-            {},
-        ) or {},
+        "checks": (
+            audit.get(
+                "checks",
+                {},
+            )
+            or {}
+        ),
 
         "evidence": evidence,
 
@@ -394,10 +485,10 @@ async def audit_invoice(
     invoice: UploadFile,
 ) -> dict:
     """
-    Save the uploaded document temporarily and run the
-    existing Innov8X multimodal audit pipeline.
+    Save the uploaded document temporarily and
+    run the existing Innov8X multimodal audit pipeline.
 
-    Supported inputs:
+    Supported:
 
         PDF
         PNG
@@ -407,8 +498,9 @@ async def audit_invoice(
         TIFF
         EML
 
-    The original extension is preserved so the multimodal
-    extraction layer can determine how to process it.
+    The original file extension is preserved so the
+    multimodal extraction layer can determine how to
+    process the document.
     """
 
     # ========================================================

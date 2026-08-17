@@ -1,6 +1,16 @@
-export type AuditStatus = "PASS" | "FAIL";
+export type AuditStatus =
+  | "PASS"
+  | "FAIL"
+  | "INSUFFICIENT_EVIDENCE"
+  | "UNKNOWN";
 
-export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type Severity =
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH"
+  | "CRITICAL"
+  | "REVIEW"
+  | "UNKNOWN";
 
 export interface FinancialSummary {
   billed_amount: number;
@@ -14,14 +24,14 @@ export interface Finding {
   billed_amount: number;
   expected_amount: number;
   variance: number;
-  actual_distance_miles?: number;
-  contract_rate_per_mile?: number;
-  calculation?: string;
+  actual_distance_miles?: number | null;
+  contract_rate_per_mile?: number | null;
+  calculation?: string | null;
   explanation: string;
 }
 
 export interface RateCheck {
-  status: AuditStatus;
+  status: string;
   actual_distance: number;
   contract_rate_per_mile: number;
   expected_transportation: number;
@@ -30,7 +40,7 @@ export interface RateCheck {
 }
 
 export interface FuelSurchargeCheck {
-  status: AuditStatus;
+  status: string;
   contract_rate: number;
   expected_fuel: number;
   billed_fuel: number;
@@ -38,14 +48,14 @@ export interface FuelSurchargeCheck {
 }
 
 export interface AccessorialCheck {
-  status: AuditStatus;
+  status: string;
   expected: number;
   billed: number;
   variance: number;
 }
 
 export interface DetentionCheck {
-  status: AuditStatus;
+  status: string;
   detention_minutes: number;
   free_minutes: number;
   expected: number;
@@ -54,28 +64,51 @@ export interface DetentionCheck {
 }
 
 export interface AuditChecks {
-  rate: RateCheck;
-  fuel_surcharge: FuelSurchargeCheck;
-  accessorial: AccessorialCheck;
-  detention: DetentionCheck;
+  rate?: RateCheck;
+  fuel_surcharge?: FuelSurchargeCheck;
+  accessorial?: AccessorialCheck;
+  detention?: DetentionCheck;
+  [key: string]: unknown;
 }
 
 export interface Evidence {
-  contract_source: string;
-  shipment_source: string;
-  load_source: string;
-  delivery_source: string;
+  contract_source: string | null;
+  shipment_source: string | null;
+  load_source: string | null;
+  delivery_source: string | null;
 }
 
 export interface MatchingResult {
   match_status: string;
   confidence: string;
   match_method: string;
-  shipment_id: string;
-  load_id: string;
-  trip_id: string;
-  customer_id: string;
-  route_id: string;
+  shipment_id?: string | null;
+  load_id?: string | null;
+  trip_id?: string | null;
+  customer_id?: string | null;
+  route_id?: string | null;
+  contract_id?: string | null;
+  reason?: string | null;
+  candidate_count?: number;
+  unmatched_identifiers?: Record<string, string | null>;
+  [key: string]: unknown;
+}
+
+export interface ExtractionResult {
+  document_type: string;
+  confidence: number | null;
+  needs_review: boolean;
+  missing_fields: string[];
+  review_reasons: string[];
+}
+
+export interface InvoiceLineItem {
+  description: string;
+  quantity?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  amount?: number | null;
+  category?: string | null;
 }
 
 export interface Invoice {
@@ -86,6 +119,9 @@ export interface Invoice {
   customer_id: string | null;
   po_number: string | null;
   bol_number: string | null;
+  pro_number?: string | null;
+  carrier_name?: string | null;
+  carrier_reference?: string | null;
   operator_name: string | null;
   truck_number: string | null;
   pickup_address: string | null;
@@ -98,19 +134,27 @@ export interface Invoice {
   empty_mileage_start: number | null;
   empty_mileage_end: number | null;
   empty_mileage_total: number | null;
-  transportation_charge: number;
-  fuel_charge: number;
-  accessorial_charge: number;
-  detention_charge: number;
+  transportation_charge: number | null;
+  fuel_charge: number | null;
+  accessorial_charge: number | null;
+  detention_charge: number | null;
   permits_charge: number | null;
   escorts_charge: number | null;
   special_handling_charge: number | null;
-  grand_total: number;
+  subtotal?: number | null;
+  tax?: number | null;
+  grand_total: number | null;
   currency: string | null;
+  payment_terms?: string | null;
+  additional_charges?: unknown[];
+  line_items?: InvoiceLineItem[];
+  additional_references?: unknown[];
+  raw_fields?: Record<string, unknown>;
+  extraction_metadata?: Record<string, unknown>;
 }
 
 export interface MlAnalysis {
-  risk: number | null;
+  risk: string | null;
   anomaly_score: number | null;
 }
 
@@ -121,6 +165,7 @@ export interface AuditResult {
   contract_id: string;
   status: AuditStatus;
   severity: Severity;
+  extraction: ExtractionResult;
   financial_summary: FinancialSummary;
   findings: Finding[];
   checks: AuditChecks;
@@ -130,6 +175,4 @@ export interface AuditResult {
   invoice: Invoice;
 }
 
-export interface AuditResponse extends AuditResult {
-  message: string | null;
-}
+export type AuditResponse = AuditResult;

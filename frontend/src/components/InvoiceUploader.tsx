@@ -1,30 +1,46 @@
 import { useState } from "react";
-import { FileText, Upload, X } from "lucide-react";
-import { auditInvoice } from "../services/api";
+import {
+  FileText,
+  Upload,
+  X,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
+import { auditInvoice, getApiErrorMessage } from "../services/api";
 import type { AuditResponse } from "../types/audit";
 
 interface InvoiceUploaderProps {
   onAuditComplete: (result: AuditResponse) => void;
 }
 
-function InvoiceUploader({
-  onAuditComplete,
-}: InvoiceUploaderProps) {
+const ACCEPTED_EXTENSIONS = [
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".tif",
+  ".tiff",
+  ".eml",
+];
+
+function InvoiceUploader({ onAuditComplete }: InvoiceUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleFileChange(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const selectedFile = event.target.files?.[0];
 
-    if (!selectedFile) {
-      return;
-    }
+    if (!selectedFile) return;
 
-    if (selectedFile.type !== "application/pdf") {
-      setError("Please upload a PDF invoice.");
+    const extension = `.${selectedFile.name.split(".").pop()?.toLowerCase()}`;
+
+    if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+      setError(
+        "Unsupported file. Upload a PDF, PNG, JPG, WEBP, TIFF, or EML freight invoice.",
+      );
+      setFile(null);
       return;
     }
 
@@ -33,6 +49,7 @@ function InvoiceUploader({
   }
 
   function clearFile() {
+    if (loading) return;
     setFile(null);
     setError(null);
   }
@@ -48,14 +65,10 @@ function InvoiceUploader({
       setError(null);
 
       const result = await auditInvoice(file);
-
       onAuditComplete(result);
     } catch (err) {
       console.error(err);
-
-      setError(
-        "Unable to audit the invoice. Make sure the backend is running.",
-      );
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -74,7 +87,8 @@ function InvoiceUploader({
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Upload a freight invoice PDF to run an evidence-backed audit.
+            Upload a freight invoice and Innov8X will compare it against
+            available contractual and operational evidence.
           </p>
         </div>
 
@@ -83,16 +97,16 @@ function InvoiceUploader({
             <Upload className="mb-4 h-8 w-8 text-slate-400" />
 
             <span className="text-sm font-medium text-slate-700">
-              Choose a PDF invoice
+              Choose an invoice
             </span>
 
             <span className="mt-1 text-xs text-slate-400">
-              PDF files only
+              PDF, PNG, JPG, WEBP, TIFF or EML
             </span>
 
             <input
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.eml"
               className="hidden"
               onChange={handleFileChange}
             />
@@ -102,7 +116,7 @@ function InvoiceUploader({
             <div className="flex items-center justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white">
-                  <FileText className="h-5 w-5 text-slate-700" />
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 </div>
 
                 <div className="min-w-0">
@@ -120,6 +134,7 @@ function InvoiceUploader({
                 type="button"
                 onClick={clearFile}
                 disabled={loading}
+                aria-label="Remove selected invoice"
                 className="rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-700 disabled:cursor-not-allowed"
               >
                 <X className="h-5 w-5" />
@@ -138,10 +153,16 @@ function InvoiceUploader({
           type="button"
           onClick={handleAudit}
           disabled={!file || loading}
-          className="mt-6 flex w-full items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Auditing invoice..." : "Audit Invoice"}
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {loading ? "Analyzing invoice..." : "Audit Invoice"}
         </button>
+
+        <p className="mt-3 text-center text-xs text-slate-400">
+          Innov8X will not invent operational evidence when a matching record
+          cannot be verified.
+        </p>
       </div>
     </div>
   );

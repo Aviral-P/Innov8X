@@ -8,11 +8,9 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { getDashboard } from "../services/api";
-import type {
-  BreakdownItem,
-  DashboardResponse,
-} from "../types/dashboard";
+import type { AuditResponse } from "../types/audit";
+
+const STORAGE_KEY = "innov8x_audits";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -21,128 +19,103 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function Dashboard() {
-  const [data, setData] =
-    useState<DashboardResponse | null>(null);
+function loadAudits(): AuditResponse[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
 
-  const [loading, setLoading] = useState(true);
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  async function loadDashboard() {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const result = await getDashboard();
-
-      setData(result);
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Unable to load dashboard data. Make sure the backend is running.",
-      );
-    } finally {
-      setLoading(false);
+    if (!stored) {
+      return [];
     }
+
+    return JSON.parse(stored) as AuditResponse[];
+  } catch {
+    return [];
+  }
+}
+
+function Dashboard() {
+  const [audits, setAudits] = useState<AuditResponse[]>(loadAudits);
+
+  function refreshDashboard() {
+    setAudits(loadAudits());
   }
 
-  /*
-   * Initial dashboard load.
-   *
-   * We intentionally don't call loadDashboard() here because
-   * loadDashboard() immediately changes loading state. Keeping
-   * the initial fetch inside the async function below avoids
-   * the React effect lint warning about synchronous state
-   * updates inside an effect.
-   */
   useEffect(() => {
-    let cancelled = false;
-
-    async function fetchInitialDashboard() {
-      try {
-        const result = await getDashboard();
-
-        if (!cancelled) {
-          setData(result);
-        }
-      } catch (err) {
-        console.error(err);
-
-        if (!cancelled) {
-          setError(
-            "Unable to load dashboard data. Make sure the backend is running.",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+    function handleAuditComplete() {
+      refreshDashboard();
     }
 
-    void fetchInitialDashboard();
+    window.addEventListener("innov8x-audit-complete", handleAuditComplete);
 
     return () => {
-      cancelled = true;
+      window.removeEventListener("innov8x-audit-complete", handleAuditComplete);
     };
   }, []);
 
-  /*
-   * Loading state
-   */
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-slate-500" />
+  const totalInvoices = audits.length;
 
-          <p className="mt-3 text-sm text-slate-500">
-            Loading audit intelligence...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const failedInvoices = audits.filter(
+    (audit) => audit.status === "FAIL",
+  ).length;
 
-  /*
-   * Error state
-   */
-  if (error || !data) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-          <XCircle className="mx-auto h-8 w-8 text-red-600" />
+  const passedInvoices = audits.filter(
+    (audit) => audit.status === "PASS",
+  ).length;
 
-          <p className="mt-3 text-sm text-red-700">
-            {error ?? "Dashboard data unavailable."}
-          </p>
+  const totalOvercharge = audits.reduce(
+    (sum, audit) => sum + (audit.financial_summary?.overcharge_amount ?? 0),
+    0,
+  );
 
-          <button
-            type="button"
-            onClick={loadDashboard}
-            className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const averageOvercharge =
+    failedInvoices > 0 ? totalOvercharge / failedInvoices : 0;
 
-  const {
-    summary,
-    breakdown,
-    recent_audits,
-  } = data;
+  const errorBreakdown = new Map<string, { count: number; amount: number }>();
+
+  const severityBreakdown = new Map<
+    string,
+    { count: number; amount: number }
+  >();
+
+  audits.forEach((audit) => {
+    audit.findings.forEach((finding) => {
+      const existing = errorBreakdown.get(finding.type);
+
+      errorBreakdown.set(finding.type, {
+        count: (existing?.count ?? 0) + 1,
+        amount: (existing?.amount ?? 0) + Math.max(finding.variance, 0),
+      });
+    });
+
+    const severity = audit.severity;
+
+    const existingSeverity = severityBreakdown.get(severity);
+
+    severityBreakdown.set(severity, {
+      count: (existingSeverity?.count ?? 0) + 1,
+      amount:
+        (existingSeverity?.amount ?? 0) +
+        Math.max(audit.financial_summary?.overcharge_amount ?? 0, 0),
+    });
+  });
+
+  const errors = Array.from(errorBreakdown.entries()).map(([name, value]) => ({
+    name,
+    ...value,
+  }));
+
+  const severity = Array.from(severityBreakdown.entries()).map(
+    ([name, value]) => ({
+      name,
+      ...value,
+    }),
+  );
+
+  const recentAudits = [...audits].reverse().slice(0, 10);
 
   return (
     <div className="space-y-8">
-      {/* ================================================== */}
       {/* HEADER */}
-      {/* ================================================== */}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -161,7 +134,7 @@ function Dashboard() {
 
         <button
           type="button"
-          onClick={loadDashboard}
+          onClick={refreshDashboard}
           className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
         >
           <RefreshCw className="h-4 w-4" />
@@ -169,68 +142,52 @@ function Dashboard() {
         </button>
       </div>
 
-      {/* ================================================== */}
       {/* KPI CARDS */}
-      {/* ================================================== */}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Invoices Audited"
-          value={summary.total_invoices.toLocaleString()}
+          value={totalInvoices.toLocaleString()}
           subtitle="Total invoices analyzed"
           icon={<FileText className="h-5 w-5" />}
         />
 
         <MetricCard
           title="Failed Audits"
-          value={summary.failed_invoices.toLocaleString()}
-          subtitle={`${summary.passed_invoices.toLocaleString()} passed`}
+          value={failedInvoices.toLocaleString()}
+          subtitle={`${passedInvoices.toLocaleString()} passed`}
           icon={<AlertTriangle className="h-5 w-5" />}
           danger
         />
 
         <MetricCard
           title="Financial Exposure"
-          value={formatCurrency(summary.total_overcharge)}
+          value={formatCurrency(totalOvercharge)}
           subtitle="Potential overcharge detected"
           icon={<CircleDollarSign className="h-5 w-5" />}
         />
 
         <MetricCard
           title="Average Overcharge"
-          value={formatCurrency(summary.average_overcharge)}
+          value={formatCurrency(averageOvercharge)}
           subtitle="Per failed invoice"
           icon={<CircleDollarSign className="h-5 w-5" />}
         />
       </div>
 
-      {/* ================================================== */}
       {/* BREAKDOWNS */}
-      {/* ================================================== */}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <BreakdownCard
-          title="Error Breakdown"
-          items={breakdown.errors}
-          formatAmount
-        />
+        <BreakdownCard title="Error Breakdown" items={errors} />
 
-        <BreakdownCard
-          title="Severity Breakdown"
-          items={breakdown.severity}
-          formatAmount
-        />
+        <BreakdownCard title="Severity Breakdown" items={severity} />
       </div>
 
-      {/* ================================================== */}
       {/* RECENT AUDITS */}
-      {/* ================================================== */}
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-6 py-5">
-          <h2 className="font-bold text-slate-950">
-            Recent Audits
-          </h2>
+          <h2 className="font-bold text-slate-950">Recent Audits</h2>
 
           <p className="mt-1 text-sm text-slate-500">
             Latest invoices processed by the audit engine.
@@ -264,7 +221,7 @@ function Dashboard() {
             </thead>
 
             <tbody>
-              {recent_audits.map((audit) => (
+              {recentAudits.map((audit) => (
                 <tr
                   key={audit.invoice_id}
                   className="border-b border-slate-100 last:border-0"
@@ -274,9 +231,7 @@ function Dashboard() {
                       {audit.invoice_id}
                     </p>
 
-                    <p className="text-xs text-slate-500">
-                      {audit.load_id}
-                    </p>
+                    <p className="text-xs text-slate-500">{audit.load_id}</p>
                   </td>
 
                   <td className="px-6 py-4 text-sm text-slate-600">
@@ -293,19 +248,24 @@ function Dashboard() {
 
                   <td className="px-6 py-4 text-right font-semibold text-slate-900">
                     {formatCurrency(
-                      audit.overcharge_amount,
+                      audit.financial_summary?.overcharge_amount ?? 0,
                     )}
                   </td>
                 </tr>
               ))}
 
-              {recent_audits.length === 0 && (
+              {recentAudits.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-10 text-center text-sm text-slate-500"
-                  >
-                    No audits available.
+                  <td colSpan={5} className="px-6 py-10 text-center">
+                    <FileText className="mx-auto h-8 w-8 text-slate-300" />
+
+                    <p className="mt-3 text-sm font-medium text-slate-600">
+                      No audits available.
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      Run your first invoice audit to populate the dashboard.
+                    </p>
                   </td>
                 </tr>
               )}
@@ -317,9 +277,9 @@ function Dashboard() {
   );
 }
 
-/* ====================================================== */
-/* METRIC CARD */
-/* ====================================================== */
+/* ============================================================
+   METRIC CARD
+============================================================ */
 
 interface MetricCardProps {
   title: string;
@@ -340,54 +300,42 @@ function MetricCard({
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-          danger
-            ? "bg-red-50 text-red-600"
-            : "bg-slate-100 text-slate-700"
+          danger ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-700"
         }`}
       >
         {icon}
       </div>
 
-      <p className="mt-5 text-sm text-slate-500">
-        {title}
-      </p>
+      <p className="mt-5 text-sm text-slate-500">{title}</p>
 
-      <p className="mt-1 text-2xl font-bold text-slate-950">
-        {value}
-      </p>
+      <p className="mt-1 text-2xl font-bold text-slate-950">{value}</p>
 
-      <p className="mt-1 text-xs text-slate-400">
-        {subtitle}
-      </p>
+      <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
     </div>
   );
 }
 
-/* ====================================================== */
-/* BREAKDOWN CARD */
-/* ====================================================== */
+/* ============================================================
+   BREAKDOWN CARD
+============================================================ */
+
+interface BreakdownItem {
+  name: string;
+  count: number;
+  amount: number;
+}
 
 interface BreakdownCardProps {
   title: string;
   items: BreakdownItem[];
-  formatAmount?: boolean;
 }
 
-function BreakdownCard({
-  title,
-  items,
-  formatAmount = false,
-}: BreakdownCardProps) {
-  const maxCount = Math.max(
-    ...items.map((item) => item.count),
-    1,
-  );
+function BreakdownCard({ title, items }: BreakdownCardProps) {
+  const maxCount = Math.max(...items.map((item) => item.count), 1);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="font-bold text-slate-950">
-        {title}
-      </h2>
+      <h2 className="font-bold text-slate-950">{title}</h2>
 
       <div className="mt-6 space-y-5">
         {items.map((item) => (
@@ -411,7 +359,7 @@ function BreakdownCard({
               />
             </div>
 
-            {formatAmount && item.amount > 0 && (
+            {item.amount > 0 && (
               <p className="mt-1 text-xs text-slate-400">
                 {formatCurrency(item.amount)}
               </p>
@@ -420,33 +368,24 @@ function BreakdownCard({
         ))}
 
         {items.length === 0 && (
-          <p className="text-sm text-slate-500">
-            No breakdown data available.
-          </p>
+          <p className="text-sm text-slate-500">No breakdown data available.</p>
         )}
       </div>
     </section>
   );
 }
 
-/* ====================================================== */
-/* STATUS BADGE */
-/* ====================================================== */
+/* ============================================================
+   STATUS BADGE
+============================================================ */
 
-function StatusBadge({
-  status,
-}: {
-  status: string;
-}) {
-  const passed =
-    status.toUpperCase() === "PASS";
+function StatusBadge({ status }: { status: string }) {
+  const passed = status.toUpperCase() === "PASS";
 
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
-        passed
-          ? "bg-emerald-100 text-emerald-700"
-          : "bg-red-100 text-red-700"
+        passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
       }`}
     >
       {passed ? (
@@ -460,30 +399,24 @@ function StatusBadge({
   );
 }
 
-/* ====================================================== */
-/* SEVERITY BADGE */
-/* ====================================================== */
+/* ============================================================
+   SEVERITY BADGE
+============================================================ */
 
-function SeverityBadge({
-  severity,
-}: {
-  severity: string;
-}) {
-  const normalized =
-    severity.toUpperCase();
+function SeverityBadge({ severity }: { severity: string }) {
+  const normalized = severity.toUpperCase();
 
   const classes =
-    normalized === "CRITICAL" ||
-    normalized === "HIGH"
+    normalized === "CRITICAL" || normalized === "HIGH"
       ? "bg-red-100 text-red-700"
-      : normalized === "MEDIUM"
+      : normalized === "MEDIUM" || normalized === "REVIEW"
         ? "bg-amber-100 text-amber-700"
-        : "bg-slate-100 text-slate-700";
+        : normalized === "LOW"
+          ? "bg-slate-100 text-slate-700"
+          : "bg-slate-100 text-slate-700";
 
   return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-xs font-bold ${classes}`}
-    >
+    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${classes}`}>
       {severity}
     </span>
   );
