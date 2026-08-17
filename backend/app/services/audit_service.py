@@ -26,6 +26,22 @@ from data.scripts.run_audit import run_audit
 
 
 # ============================================================
+# SUPPORTED DOCUMENT TYPES
+# ============================================================
+
+SUPPORTED_EXTENSIONS = {
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".eml",
+}
+
+
+# ============================================================
 # RESPONSE BUILDER
 # ============================================================
 
@@ -256,22 +272,34 @@ async def audit_invoice(
     invoice: UploadFile,
 ) -> dict:
     """
-    Save the uploaded invoice temporarily and
-    run the existing Innov8X audit pipeline.
+    Save the uploaded document temporarily and
+    run the existing Innov8X multimodal audit pipeline.
     """
 
+    # --------------------------------------------------------
+    # FILE TYPE
+    # --------------------------------------------------------
+
     suffix = Path(
-        invoice.filename or "invoice.pdf"
+        invoice.filename or ""
     ).suffix.lower()
 
-    if suffix != ".pdf":
+    if suffix not in SUPPORTED_EXTENSIONS:
+
         raise ValueError(
-            "Only PDF invoices are supported."
+            "Unsupported document type. "
+            "Supported formats: PDF, PNG, JPG, JPEG, "
+            "WEBP, TIFF and EML."
         )
+
+    # --------------------------------------------------------
+    # READ UPLOAD
+    # --------------------------------------------------------
 
     contents = await invoice.read()
 
     if not contents:
+
         raise ValueError(
             "Uploaded invoice is empty."
         )
@@ -280,8 +308,12 @@ async def audit_invoice(
 
     try:
 
+        # ----------------------------------------------------
+        # PRESERVE ORIGINAL EXTENSION
+        # ----------------------------------------------------
+
         with tempfile.NamedTemporaryFile(
-            suffix=".pdf",
+            suffix=suffix,
             delete=False,
         ) as temporary_file:
 
@@ -293,9 +325,27 @@ async def audit_invoice(
                 temporary_file.name
             )
 
+        print(
+            f"Processing uploaded document: "
+            f"{invoice.filename}"
+        )
+
+        print(
+            f"Temporary document: "
+            f"{temporary_path}"
+        )
+
+        # ----------------------------------------------------
+        # RUN EXISTING PIPELINE
+        # ----------------------------------------------------
+
         result = run_audit(
             temporary_path
         )
+
+        # ----------------------------------------------------
+        # BUILD API RESPONSE
+        # ----------------------------------------------------
 
         return build_api_response(
             result
@@ -307,4 +357,5 @@ async def audit_invoice(
             temporary_path is not None
             and temporary_path.exists()
         ):
+
             temporary_path.unlink()

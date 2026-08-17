@@ -5,6 +5,8 @@ from pathlib import Path
 import pandas as pd
 
 from data.scripts.openai_invoice import extract_invoice
+from data.scripts.normalize_invoice import normalize_invoice
+from data.scripts.normalize_invoice import normalize_invoice
 from data.scripts.invoice_matcher import (
     match_invoice_by_identifiers,
 )
@@ -61,6 +63,22 @@ OUTPUT_PATH = (
 
 
 # ============================================================
+# SUPPORTED DOCUMENT TYPES
+# ============================================================
+
+SUPPORTED_EXTENSIONS = {
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".eml",
+}
+
+
+# ============================================================
 # DATA LOADING
 # ============================================================
 
@@ -110,15 +128,23 @@ def run_audit(invoice_path):
     )
 
     # --------------------------------------------------------
-    # 1. OCR
+    # 1. MULTIMODAL EXTRACTION + NORMALIZATION
     # --------------------------------------------------------
 
     print(
-        "\n[1/5] Extracting invoice..."
+        "\n[1/5] Extracting and understanding invoice..."
     )
 
-    invoice = extract_invoice(
+    raw_invoice = extract_invoice(
         invoice_path
+    )
+
+    invoice = normalize_invoice(
+        raw_invoice
+    )
+
+    invoice = normalize_invoice(
+        raw_invoice
     )
 
     print(
@@ -135,6 +161,27 @@ def run_audit(invoice_path):
         f"Load reference: "
         f"{invoice.get('load_reference')}"
     )
+
+    extraction_metadata = (
+        invoice.get(
+            "extraction_metadata"
+        )
+        or {}
+    )
+
+    print(
+        f"Extraction confidence: "
+        f"{extraction_metadata.get('classifier_confidence')}"
+    )
+
+    if extraction_metadata.get(
+        "needs_review",
+        False,
+    ):
+
+        print(
+            "Warning: extraction requires review."
+        )
 
     # --------------------------------------------------------
     # 2. LOAD EVIDENCE
@@ -182,7 +229,9 @@ def run_audit(invoice_path):
         f"{matching.get('confidence')}"
     )
 
-    if matching.get("match_status") != "MATCHED":
+    if matching.get(
+        "match_status"
+    ) != "MATCHED":
 
         result = {
             "invoice": invoice,
@@ -330,6 +379,7 @@ def run_audit(invoice_path):
     )
 
     for error in audit["error_types"]:
+
         print(
             f"  - {error}"
         )
@@ -363,8 +413,19 @@ def main():
 
         print(
             "python data/scripts/run_audit.py "
-            "<invoice.pdf>"
+            "<invoice>"
         )
+
+        print(
+            "\nSupported formats:"
+        )
+
+        for extension in sorted(
+            SUPPORTED_EXTENSIONS
+        ):
+            print(
+                f"  {extension}"
+            )
 
         sys.exit(1)
 
@@ -375,7 +436,7 @@ def main():
     if not invoice_path.exists():
 
         print(
-            f"ERROR: Invoice not found:"
+            "ERROR: Invoice/document not found:"
         )
 
         print(
@@ -384,10 +445,24 @@ def main():
 
         sys.exit(1)
 
-    if invoice_path.suffix.lower() != ".pdf":
+    if invoice_path.suffix.lower() not in (
+        SUPPORTED_EXTENSIONS
+    ):
 
         print(
-            "ERROR: Input must be a PDF invoice."
+            "ERROR: Unsupported document type."
+        )
+
+        print(
+            "Supported formats:"
+        )
+
+        print(
+            ", ".join(
+                sorted(
+                    SUPPORTED_EXTENSIONS
+                )
+            )
         )
 
         sys.exit(1)
@@ -397,6 +472,35 @@ def main():
         run_audit(
             invoice_path
         )
+
+    except ValueError as exc:
+
+        message = str(exc)
+
+        if message.startswith(
+            "INVALID_INVOICE:"
+        ):
+
+            reason = message[
+                len("INVALID_INVOICE:")
+            ].strip()
+
+            print(
+                "\nINVALID DOCUMENT"
+            )
+
+            print(
+                "Kindly upload a valid freight invoice."
+            )
+
+            if reason:
+                print(
+                    f"Reason: {reason}"
+                )
+
+            sys.exit(2)
+
+        raise
 
     except Exception as exc:
 
