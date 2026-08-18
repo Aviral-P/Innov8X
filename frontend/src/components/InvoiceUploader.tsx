@@ -87,7 +87,7 @@ function InvoiceUploader({ onAuditComplete }: InvoiceUploaderProps) {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Upload a freight invoice and Innov8X will compare it against
+            Upload a freight invoice and FreightGuard will compare it against
             available contractual and operational evidence.
           </p>
         </div>
@@ -160,7 +160,7 @@ function InvoiceUploader({ onAuditComplete }: InvoiceUploaderProps) {
         </button>
 
         <p className="mt-3 text-center text-xs text-slate-400">
-          Innov8X will not invent operational evidence when a matching record
+          FreightGuard will not invent operational evidence when a matching record
           cannot be verified.
         </p>
       </div>

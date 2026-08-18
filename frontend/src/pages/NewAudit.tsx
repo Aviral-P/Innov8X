@@ -50,7 +50,7 @@ function NewAudit() {
         </h1>
 
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-          Upload a freight invoice and Innov8X will extract the billing data,
+          Upload a freight invoice and FreightGuard will extract the billing data,
           match it against available evidence, and identify supported
           discrepancies.
         </p>
@@ -70,7 +70,7 @@ function NewAudit() {
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
             A missing operational record does not become a guessed match.
-            When evidence is insufficient, Innov8X sends the invoice for
+            When evidence is insufficient, FreightGuard sends the invoice for
             review instead of inventing an audit result.
           </p>
 

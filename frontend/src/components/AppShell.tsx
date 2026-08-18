@@ -31,7 +31,7 @@ function AppShell({ children }: AppShellProps) {
 
             <div>
               <p className="text-sm font-bold tracking-wide text-slate-950">
-                INNOV8X
+                FreightGuard
               </p>
 
               <p className="text-[11px] text-slate-500">

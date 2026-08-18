@@ -33,7 +33,7 @@ export function getApiErrorMessage(
     }
 
     if (!error.response) {
-      return "Unable to connect to the Innov8X backend.";
+      return "Unable to connect to the FreightGuard backend.";
     }
   }
 
